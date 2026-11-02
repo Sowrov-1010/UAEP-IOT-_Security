@@ -1,0 +1,7 @@
+/vendor/
+/.env
+/.env.*
+!/.env.example
+*service-account*.json
+firebase-service-account.json
+*.pem

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#101b31">
+  <title>UAEP | Smart Access & Safety</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#top" aria-label="UAEP dashboard home">
+      <span class="brand-mark">U</span><span><b>UAEP</b><small>SMART ACCESS & SAFETY</small></span>
+    </a>
+    <div class="topbar-right"><span class="local-pill"><i></i> Local network</span><time id="clock">--:--:--</time></div>
+  </header>
+  <main id="top">
+    <section class="welcome">
+      <div><div class="eyebrow">CONTROL CENTER <span id="todayLabel"></span></div><h1>Smart facility dashboard</h1><p>Monitor connected controllers, manage access credentials, and review system activity.</p></div>
+      <button class="button button-primary" id="addDeviceTop">＋ Add device</button>
+    </section>
+
+    <section class="stat-grid" aria-label="System overview">
+      <article class="stat-card"><div class="stat-top"><span>Registered devices</span><span class="stat-icon blue">▦</span></div><strong id="statDevices">0</strong><small>Controllers in this system</small></article>
+      <article class="stat-card"><div class="stat-top"><span>Online now</span><span class="stat-icon green">●</span></div><strong id="statOnline">0</strong><small>Connected over local Wi-Fi</small></article>
+      <article class="stat-card"><div class="stat-top"><span>Access events</span><span class="stat-icon amber">↗</span></div><strong id="statEvents">0</strong><small>Recorded in the event log</small></article>
+      <article class="stat-card"><div class="stat-top"><span>Database</span><span class="stat-icon violet">▤</span></div><strong id="databaseStatus">Checking…</strong><small id="databaseMessage">Connecting to Firebase Cloud Firestore</small></article>
+    </section>
+
+    <section class="section-block">
+      <div class="section-heading"><div><div class="eyebrow">HARDWARE</div><h2>ESP32 controllers</h2><p>Add both boards here; each has its own IP and connection status.</p></div><button class="button button-outline" id="addDeviceButton">＋ Add device</button></div>
+      <div id="deviceGrid" class="device-grid"><div class="empty-state">Loading devices…</div></div>
+    </section>
+
+    <section class="section-block history-section">
+      <div class="section-heading"><div><div class="eyebrow">DATABASE</div><h2>Saved sensor readings</h2><p>Each successful dashboard poll is stored in Firestore, including the complete ESP32 JSON payload.</p></div><button class="button button-outline" id="exportReadings">Download all readings (CSV)</button></div>
+      <div class="table-wrap"><table class="readings-table"><thead><tr><th>Time</th><th>Device</th><th>Motion</th><th>Distance</th><th>Gas raw</th><th>Fire</th><th>Temp °C</th><th>Humidity %</th><th>Light raw</th><th>Alarm</th></tr></thead><tbody id="sensorReadings"><tr><td colspan="10" class="muted">Loading readings…</td></tr></tbody></table></div>
+    </section>
+
+    <section class="section-block access-section">
+      <div class="section-heading"><div><div class="eyebrow">CREDENTIALS</div><h2>Access management</h2><p>Manage RFID cards and fingerprints on your access-control ESP32.</p></div><select id="accessDevice" class="select-control" aria-label="Access control device"><option value="">Select access controller</option></select></div>
+      <div class="access-grid">
+        <article class="panel"><div class="panel-title"><span class="panel-icon blue">▣</span><div><h3>Register fingerprint</h3><p>Follow the prompts on the device LCD.</p></div></div><div class="field-row"><label>Fingerprint ID<input id="fingerId" type="number" min="1" max="127" placeholder="1–127"></label><label>Owner name<input id="fingerName" maxlength="30" placeholder="Name"></label></div><button class="button button-primary full" id="registerFinger">Start registration</button><button class="button button-outline full spaced" id="checkFinger">Scan and check fingerprint</button></article>
+        <article class="panel"><div class="panel-title"><span class="panel-icon violet">▤</span><div><h3>RFID card</h3><p>Add an authorized card by its scanned UID.</p></div></div><label>Card UID<input id="rfidUid" maxlength="20" placeholder="Example: 4110DD0A"></label><label>Cardholder name<input id="rfidName" maxlength="30" placeholder="Name"></label><button class="button button-primary full" id="addRfid">Add authorized card</button></article>
+        <article class="panel list-panel"><div class="panel-title"><span class="panel-icon blue">▤</span><div><h3>Fingerprint directory</h3><p>Names are saved in this browser; templates stay on the sensor.</p></div><button class="icon-button" id="refreshFingerprints" title="Refresh">↻</button></div><div id="fingerprintList" class="credential-list"><div class="muted">Connect an access controller to load.</div></div></article>
+        <article class="panel list-panel"><div class="panel-title"><span class="panel-icon violet">▣</span><div><h3>Authorized RFID cards</h3><p>Cards registered on the selected controller.</p></div><button class="icon-button" id="refreshRfids" title="Refresh">↻</button></div><div id="rfidList" class="credential-list"><div class="muted">Connect an access controller to load.</div></div></article>
+      </div>
+    </section>
+
+    <section class="section-block lower-grid">
+      <article class="panel events-panel"><div class="section-heading compact"><div><div class="eyebrow">AUDIT TRAIL</div><h2>Recent activity</h2></div><button class="button button-outline small" id="refreshEvents">Refresh</button></div><div id="eventList" class="event-list"><div class="empty-state">Loading activity…</div></div></article>
+      <article class="panel help-panel"><div class="eyebrow">SETUP NOTES</div><h2>Connect your boards</h2><ol><li>Connect each ESP32 to the same Wi-Fi network as this computer.</li><li>Find each board’s IP in the Arduino Serial Monitor and add it above.</li><li>The firmware must expose <code>/api/test</code> and <code>/api/status</code>.</li></ol><div class="note">Device settings, activity, and sensor readings are stored in Firebase Cloud Firestore. Access-control actions are forwarded to the selected ESP32.</div></article>
+    </section>
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  </main>
+
+  <dialog id="deviceDialog" class="dialog"><form id="deviceForm" method="dialog"><div class="dialog-header"><div><div class="eyebrow">HARDWARE</div><h2>Add ESP32 controller</h2></div><button class="icon-button" value="cancel" aria-label="Close">×</button></div><label>Device name<input name="name" required maxlength="60" placeholder="Entrance controller"></label><label>IP address<input name="ip" required inputmode="decimal" placeholder="192.168.1.100"></label><label>Device role<select name="role"><option value="access">Access control (RFID / fingerprint)</option><option value="sensors">Sensors / safety</option><option value="camera">Camera</option><option value="other">Other</option></select></label><div class="dialog-actions"><button class="button button-outline" value="cancel">Cancel</button><button class="button button-primary" id="saveDevice" value="default">Save device</button></div></form></dialog>
+  <script src="assets/app.js?v=20261103-firestore-setup" defer></script>
+</body>
+</html>

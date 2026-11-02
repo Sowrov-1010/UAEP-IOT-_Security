@@ -1,0 +1,38 @@
+ESP32 SENSOR NODE PIN MAP — MATCHES esp32_sensor_controller.ino
+
+Assumes a classic ESP32 DevKit / ESP32-WROOM board. Join every module GND
+to ESP32 GND. The ESP32 GPIO inputs are 3.3 V only.
+
+PIR motion sensor: OUT -> GPIO 27
+Ultrasonic HC-SR04: TRIG -> GPIO 5; ECHO -> voltage divider -> GPIO 18
+Gas sensor module: AO -> GPIO 34 (ADC1, input only)
+Flame sensor module: DO -> GPIO 26
+DHT22: DATA -> GPIO 4
+LDR voltage-divider midpoint -> GPIO 35 (ADC1, input only)
+LED: GPIO 25 -> 220–330 ohm resistor -> LED anode; LED cathode -> GND
+Active buzzer: control/input -> GPIO 14; GND -> common GND
+
+VOLTAGE AND POWER
+- Do not connect a 5 V signal directly to an ESP32 GPIO.
+- HC-SR04 ECHO is typically 5 V. Example divider: ECHO -> 1 kOhm -> GPIO18;
+  GPIO18 -> 2 kOhm -> GND. Never connect ECHO directly.
+- If the gas board is powered at 5 V, scale AO so GPIO34 never exceeds 3.3 V.
+  The gas module may need a separate supply; check its current requirements.
+- Ensure flame-module DO is no more than 3.3 V. The sketch uses INPUT_PULLUP
+  and assumes LOW means flame detection. Check `fireLevel` in /api/status and
+  reverse FIRE_ACTIVE if your module has the opposite output polarity.
+- A bare DHT22 needs a 4.7–10 kOhm pull-up from DATA to 3.3 V; many breakouts
+  already include one.
+- LDR divider expected by this sketch: 3.3 V -> LDR -> node -> 10 kOhm -> GND.
+  This should read lower in darkness; adjust LDR_DARK_THRESHOLD for your room.
+- Use a transistor/MOSFET driver for any large lamp or buzzer load. Do not
+  power a street lamp directly from GPIO25.
+
+INTEGRATION
+This sketch serves /api/test, /api/status, and /api/data. The XAMPP dashboard
+connects using /api/test and reads values from /api/status. Open the ESP32 IP
+at /api/status to inspect sensor JSON. Tune GAS_THRESHOLD and
+LDR_DARK_THRESHOLD after observing raw values in Serial Monitor at 115200 baud.
+Ultrasonic values under 2 cm or above 400 cm are rejected as invalid.
+
+These hobby sensors are for a prototype, not certified safety alarms.
