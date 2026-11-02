@@ -5,12 +5,15 @@ PROJECT FILES
    assets/style.css               Page design and responsive layout
    assets/app.js                  Browser behavior and API requests
    api.php                        PHP Firestore backend and ESP32 proxy
+   firestore_rest.php             Firestore REST API client
    migrate_mysql_to_firestore.php One-time importer for an existing MySQL DB
 
 INSTALL / RUN
 1. Copy the project into C:\xampp\htdocs\uaep-xampp\.
 2. Install PHP 8.1+ and Composer, then run `composer install` in the project
-   folder. XAMPP's PHP executable is usually C:\xampp\php\php.exe.
+   folder. The dashboard uses Firestore's HTTPS REST API and does not require
+   the native PHP gRPC extension. XAMPP's PHP executable is usually
+   C:\xampp\php\php.exe.
 3. Create a Firebase project and a Cloud Firestore database in Native mode.
 4. Create a Firebase service-account key in Firebase project settings and give
    the service account Firestore access. Store its JSON file outside htdocs,

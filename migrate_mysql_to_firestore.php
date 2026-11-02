@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/firestore_rest.php';
 
 $credentials = getenv('FIREBASE_CREDENTIALS') ?: getenv('GOOGLE_APPLICATION_CREDENTIALS');
 if (!$credentials || !is_file($credentials)) {
@@ -17,7 +18,7 @@ $pdo = new PDO("mysql:host={$host};dbname={$name};charset=utf8mb4", $user, $pass
     PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
 ]);
-$firestore = (new Kreait\Firebase\Factory())->withServiceAccount($credentials)->createFirestore()->database();
+$firestore = new FirestoreRest($credentials);
 
 function imported_value(array $row, string $key): mixed {
     if (!array_key_exists($key, $row) || $row[$key] === null) return null;
@@ -38,18 +39,14 @@ function imported_value(array $row, string $key): mixed {
     return $row[$key];
 }
 
-function migrate_collection(PDO $pdo, $firestore, string $table, string $collection): int {
+function migrate_collection(PDO $pdo, FirestoreRest $firestore, string $table, string $collection): int {
     $rows = $pdo->query("SELECT * FROM `{$table}` ORDER BY id")->fetchAll();
-    foreach (array_chunk($rows, 400) as $chunk) {
-        $batch = $firestore->batch();
-        foreach ($chunk as $row) {
-            $id = (string)$row['id'];
-            unset($row['id']);
-            $document = [];
-            foreach ($row as $key => $value) $document[$key] = imported_value($row, $key);
-            $batch->set($firestore->collection($collection)->document($id), $document);
-        }
-        $batch->commit();
+    foreach ($rows as $row) {
+        $id = (string)$row['id'];
+        unset($row['id']);
+        $document = [];
+        foreach ($row as $key => $value) $document[$key] = imported_value($row, $key);
+        $firestore->setDocument($collection, $id, $document);
     }
     return count($rows);
 }

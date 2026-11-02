@@ -2,6 +2,7 @@
 declare(strict_types=1);
 
 require __DIR__ . '/vendor/autoload.php';
+require __DIR__ . '/firestore_rest.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
@@ -12,42 +13,23 @@ function respond(int $status, array $data): never {
     exit;
 }
 
-function db() {
+function db(): FirestoreRest {
     static $database = null;
     if ($database !== null) return $database;
     $credentials = getenv('FIREBASE_CREDENTIALS') ?: getenv('GOOGLE_APPLICATION_CREDENTIALS');
     if (!$credentials || !is_file($credentials)) {
         throw new DomainException('Firebase credentials are not configured. Set FIREBASE_CREDENTIALS in Apache to your service-account JSON path; see README-XAMPP.txt.');
     }
-    $factory = (new Kreait\Firebase\Factory())->withServiceAccount($credentials);
-    $database = $factory->createFirestore()->database();
+    $database = new FirestoreRest($credentials);
     return $database;
 }
 
 function collection_rows(string $collection): array {
-    $rows = [];
-    foreach (db()->collection($collection)->documents() as $snapshot) {
-        if (!$snapshot->exists()) continue;
-        $row = $snapshot->data();
-        $row['id'] = $snapshot->id();
-        $rows[] = $row;
-    }
-    return $rows;
+    return db()->listCollection($collection);
 }
 
 function query_rows(string $collection, string $field, bool $descending, int $limit, string $deviceId = ''): array {
-    $query = db()->collection($collection);
-    if ($deviceId !== '') $query = $query->where('device_id', '=', $deviceId);
-    $query = $query->orderBy($field, $descending ? Google\Cloud\Firestore\Query::DIR_DESCENDING : Google\Cloud\Firestore\Query::DIR_ASCENDING);
-    if ($limit > 0) $query = $query->limit($limit);
-    $rows = [];
-    foreach ($query->documents() as $snapshot) {
-        if (!$snapshot->exists()) continue;
-        $row = $snapshot->data();
-        $row['id'] = $snapshot->id();
-        $rows[] = $row;
-    }
-    return $rows;
+    return db()->query($collection, $field, $descending, $limit, $deviceId);
 }
 
 function sort_rows(array &$rows, string $field, bool $descending = true): void {
@@ -65,13 +47,11 @@ function body_json(): array {
 }
 
 function get_device(string $id): ?array {
-    $snapshot = db()->collection('devices')->document($id)->snapshot();
-    if (!$snapshot->exists()) return null;
-    return array_merge($snapshot->data(), ['id' => $snapshot->id()]);
+    return db()->getDocument('devices', $id);
 }
 
 function log_event(?string $deviceId, string $category, string $message, $details = null): void {
-    db()->collection('events')->newDocument()->set([
+    db()->createDocument('events', [
         'device_id' => $deviceId,
         'category' => $category,
         'message' => mb_substr($message, 0, 255),
@@ -153,7 +133,7 @@ try {
     $route = implode('/', $parts);
 
     if ($method === 'GET' && $route === 'health') {
-        db()->collection('devices')->limit(1)->documents();
+        db()->query('devices', null, true, 1);
         respond(200, ['success' => true, 'service' => 'UAEP XAMPP dashboard', 'database' => 'Firestore', 'time' => date(DATE_ATOM)]);
     }
 
@@ -172,7 +152,7 @@ try {
             $event['device_name'] = $deviceNames[(string)($event['device_id'] ?? '')] ?? null;
         }
         unset($event);
-        $total = db()->collection('events')->count();
+        $total = db()->count('events');
         respond(200, ['success' => true, 'events' => $events, 'total' => $total]);
     }
 
@@ -213,8 +193,7 @@ try {
         foreach (collection_rows('devices') as $existing) {
             if (($existing['ip'] ?? '') === $ip) respond(409, ['success' => false, 'message' => 'That IP address is already registered']);
         }
-        $deviceRef = db()->collection('devices')->newDocument();
-        $deviceRef->set([
+        $id = db()->createDocument('devices', [
             'name' => mb_substr($name, 0, 60),
             'ip' => $ip,
             'role' => $role,
@@ -222,7 +201,6 @@ try {
             'last_seen' => null,
             'created_at' => date(DATE_ATOM),
         ]);
-        $id = $deviceRef->id();
         log_event($id, 'device', 'Added ' . $name, ['ip' => $ip, 'role' => $role]);
         respond(201, ['success' => true, 'device' => get_device($id)]);
     }
@@ -238,7 +216,7 @@ try {
             $online = $status < 400 && ($payload['success'] ?? true) !== false;
             $updates = ['state' => $online ? 'online' : 'offline'];
             if ($online) $updates['last_seen'] = date(DATE_ATOM);
-            db()->collection('devices')->document($id)->set($updates, ['merge' => true]);
+            db()->setDocument('devices', $id, $updates, true);
             log_event($id, 'connection', $online ? 'Device connected' : 'Device connection failed', $payload);
             respond($online ? 200 : $status, ['success' => $online, 'device' => get_device($id), 'response' => $payload]);
         }
@@ -248,7 +226,7 @@ try {
             $online = $status < 400 && ($payload['success'] ?? true) !== false;
             $updates = ['state' => $online ? 'online' : 'offline'];
             if ($online) $updates['last_seen'] = date(DATE_ATOM);
-            db()->collection('devices')->document($id)->set($updates, ['merge' => true]);
+            db()->setDocument('devices', $id, $updates, true);
             if ($online && is_array($payload)) store_sensor_reading($device, $payload);
             respond($status, ['success' => $online, 'device' => get_device($id), 'status' => $payload]);
         }
@@ -266,7 +244,7 @@ try {
         $id = $parts[1];
         $device = get_device($id);
         if (!$device) respond(404, ['success' => false, 'message' => 'Device not found']);
-        db()->collection('devices')->document($id)->delete();
+        db()->deleteDocument('devices', $id);
         log_event(null, 'device', 'Removed device ' . $device['name'], ['ip' => $device['ip']]);
         respond(200, ['success' => true]);
     }
