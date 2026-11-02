@@ -96,7 +96,7 @@ function db_number($value): ?float {
 function store_sensor_reading(array $device, array $data): void {
     $distance = db_number(field_value($data, ['distanceCm', 'distance']));
     if ($distance !== null && $distance < 0) $distance = null;
-    db()->collection('sensor_readings')->newDocument()->set([
+    db()->createDocument('sensor_readings', [
         'device_id' => (string)$device['id'],
         'device_name' => mb_substr((string)$device['name'], 0, 60),
         'device_ip' => (string)$device['ip'],
