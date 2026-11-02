@@ -39,7 +39,7 @@
     </section>
 
     <section class="section-block attendance-section">
-      <div class="section-heading"><div><div class="eyebrow">ATTENDANCE</div><h2>People and time records</h2><p>Register owner details and record today’s arrival and departure times.</p></div><button class="button button-outline" id="exportAttendance">Download attendance (CSV)</button></div>
+      <div class="section-heading"><div><div class="eyebrow">ATTENDANCE</div><h2>People and time records</h2><p>Register owner details and record today’s arrival and departure times.</p></div></div>
       <div class="attendance-tools">
         <form id="personForm" class="panel person-form">
           <div class="panel-title"><span class="panel-icon blue">＋</span><div><h3>Register person</h3><p>Name, address, and one or both credentials.</p></div></div>
@@ -56,7 +56,7 @@
           <p class="muted attendance-time-note">Times are shown in your local timezone.</p>
         </article>
       </div>
-      <div class="table-wrap attendance-table-wrap"><table class="attendance-table"><thead><tr><th>Name</th><th>Address</th><th>Fingerprint owner</th><th>Fingerprint ID</th><th>RFID owner</th><th>RFID UID</th><th>Time in</th><th>Time out</th></tr></thead><tbody id="attendanceRows"><tr><td colspan="8" class="muted">Loading attendance…</td></tr></tbody></table></div>
+      <div class="table-wrap attendance-table-wrap"><div class="attendance-table-toolbar"><button class="button button-outline" id="exportAttendance">Download attendance (CSV)</button></div><table class="attendance-table"><thead><tr><th>Name</th><th>Address</th><th>Fingerprint owner</th><th>Fingerprint ID</th><th>RFID owner</th><th>RFID UID</th><th>Time in</th><th>Time out</th></tr></thead><tbody id="attendanceRows"><tr><td colspan="8" class="muted">Loading attendance…</td></tr></tbody></table></div>
     </section>
 
     <section class="section-block access-section">
