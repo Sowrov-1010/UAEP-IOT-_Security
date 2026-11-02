@@ -194,6 +194,12 @@ function downloadReadings() {
   url.searchParams.set("route", "readings.csv");
   window.location.href = url.toString();
 }
+function downloadAttendance() {
+  const url = new URL("api.php", window.location.href);
+  url.searchParams.set("route", "attendance.csv");
+  url.searchParams.set("date", localDateKey());
+  window.location.href = url.toString();
+}
 async function addDevice(event) {
   event.preventDefault();
   const form = event.currentTarget, formData = new FormData(form), button = $("saveDevice"); button.disabled = true;
@@ -286,6 +292,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("registerFinger").onclick = registerFingerprint; $("checkFinger").onclick = checkFingerprint; $("addRfid").onclick = addRfid;
   $("refreshFingerprints").onclick = renderFingerprintLabels; $("refreshRfids").onclick = loadRfids; $("refreshEvents").onclick = loadEvents;
   $("exportReadings").onclick = downloadReadings;
+  $("exportAttendance").onclick = downloadAttendance;
   $("accessDevice").addEventListener("change", refreshCredentialLists);
   try {
     await api("/api/health");

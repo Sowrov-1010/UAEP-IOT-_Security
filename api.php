@@ -207,6 +207,31 @@ try {
         respond(200, ['success' => true, 'attendance' => $records, 'date' => $date]);
     }
 
+    if ($method === 'GET' && $route === 'attendance.csv') {
+        $date = (string)($_GET['date'] ?? date('Y-m-d'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date)) respond(400, ['success' => false, 'message' => 'Date must use YYYY-MM-DD']);
+        $records = db()->query('attendance', 'work_date', false, 500, '', 'work_date', $date);
+        usort($records, static fn(array $left, array $right): int => strcasecmp((string)($left['name'] ?? ''), (string)($right['name'] ?? '')));
+        header_remove('Content-Type');
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="uaep-attendance-' . $date . '.csv"');
+        $out = fopen('php://output', 'w');
+        fwrite($out, "\xEF\xBB\xBF");
+        $columns = ['work_date','name','address','fingerprint_owner_name','fingerprint_id','rfid_owner_name','rfid_uid','time_in','time_out'];
+        fputcsv($out, $columns);
+        foreach ($records as $record) {
+            $row = array_map(fn($column) => $record[$column] ?? '', $columns);
+            foreach ($row as &$cell) {
+                $cell = (string)$cell;
+                if (preg_match('/^[\t\r ]*[=+\-@]/', $cell)) $cell = "'" . $cell;
+            }
+            unset($cell);
+            fputcsv($out, $row);
+        }
+        fclose($out);
+        exit;
+    }
+
     if ($method === 'POST' && $route === 'attendance') {
         $data = body_json();
         $personId = trim((string)($data['person_id'] ?? ''));
