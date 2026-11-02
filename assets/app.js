@@ -311,6 +311,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     setDatabaseStatus(status, e.message);
     $("deviceGrid").innerHTML = `<div class="empty-state">${esc(e.message)}</div>`;
     $("sensorReadings").innerHTML = `<tr><td colspan="10" class="muted">${esc(e.message)}</td></tr>`;
+    $("attendanceRows").innerHTML = `<tr><td colspan="8" class="muted">${esc(e.message)}</td></tr>`;
     $("eventList").innerHTML = `<div class="muted">${esc(e.message)}</div>`;
     notify(e.message, true);
   }
