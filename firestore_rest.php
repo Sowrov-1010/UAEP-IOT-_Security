@@ -44,7 +44,7 @@ final class FirestoreRest
         return $documents;
     }
 
-    public function query(string $collection, ?string $field = null, bool $descending = true, int $limit = 0, string $deviceId = ''): array
+    public function query(string $collection, ?string $field = null, bool $descending = true, int $limit = 0, string $deviceId = '', ?string $filterField = null, $filterValue = null): array
     {
         $structuredQuery = ['from' => [['collectionId' => $collection]]];
         if ($deviceId !== '') {
@@ -52,6 +52,12 @@ final class FirestoreRest
                 'field' => ['fieldPath' => 'device_id'],
                 'op' => 'EQUAL',
                 'value' => $this->encodeValue($deviceId),
+            ]];
+        } elseif ($filterField !== null) {
+            $structuredQuery['where'] = ['fieldFilter' => [
+                'field' => ['fieldPath' => $filterField],
+                'op' => 'EQUAL',
+                'value' => $this->encodeValue($filterValue),
             ]];
         }
         if ($field !== null) {

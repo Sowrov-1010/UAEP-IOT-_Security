@@ -46,10 +46,15 @@ FIRESTORE COLLECTIONS
   devices          ESP32 configuration and connection state
   events           Dashboard audit events
   sensor_readings  Sensor history and complete ESP32 JSON payloads
+   people           Registered names, addresses, fingerprint IDs, and RFID UIDs
+   attendance       One daily record per person with time_in and time_out
 
 The dashboard polls each device every five seconds while open. Use Download all
 readings (CSV) to export sensor history. Firestore quotas and billing apply;
 consider retention rules if the sensor history grows significantly.
+Attendance times are recorded with the dashboard's Record time in and Record
+time out actions. The current access-controller status does not provide unique
+timestamped scan events for automatic attendance capture.
 
 ESP32 FIRMWARE ENDPOINTS
 Every board needs GET /api/test and GET /api/status returning JSON.

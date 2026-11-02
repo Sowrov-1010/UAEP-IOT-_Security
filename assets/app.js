@@ -1,4 +1,4 @@
-const state = { devices: [], statuses: new Map(), statusErrors: new Map(), timer: null, toastTimer: null };
+const state = { devices: [], people: [], statuses: new Map(), statusErrors: new Map(), timer: null, toastTimer: null };
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -23,6 +23,7 @@ function setDatabaseStatus(connected, message) {
 }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]); }
 function timeText(value) { if (!value) return "Never"; const d = new Date(value); return Number.isNaN(+d) ? value : d.toLocaleString(); }
+function localDateKey() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; }
 function roleText(role) { return ({access:"Access control", sensors:"Sensors / safety", camera:"Camera", other:"Other device"})[role] || "Other device"; }
 function online(device) { return device.state === "online"; }
 function telemetryView(status) {
@@ -134,6 +135,60 @@ async function loadSensorReadings() {
   }
 }
 
+async function loadAttendance() {
+  const [peopleResult, attendanceResult] = await Promise.all([api("/api/people"), api(`/api/attendance?date=${localDateKey()}`)]);
+  state.people = peopleResult.people || [];
+  const attendanceByPerson = new Map((attendanceResult.attendance || []).map(record => [record.person_id, record]));
+  const picker = $("attendancePerson"), selected = picker.value;
+  picker.innerHTML = '<option value="">Select person</option>' + state.people.map(person => `<option value="${esc(person.id)}">${esc(person.name)}</option>`).join("");
+  if (state.people.some(person => person.id === selected)) picker.value = selected;
+  const rows = $("attendanceRows");
+  rows.innerHTML = state.people.length ? state.people.map(person => {
+    const record = attendanceByPerson.get(person.id) || {};
+    return `<tr><td>${esc(person.name)}</td><td>${esc(person.address)}</td><td>${esc(person.fingerprint_owner_name || "—")}</td><td>${esc(person.fingerprint_id || "—")}</td><td>${esc(person.rfid_owner_name || "—")}</td><td>${esc(person.rfid_uid || "—")}</td><td>${esc(record.time_in ? timeText(record.time_in) : "—")}</td><td>${esc(record.time_out ? timeText(record.time_out) : "—")}</td></tr>`;
+  }).join("") : '<tr><td colspan="8" class="muted">No people registered yet.</td></tr>';
+}
+
+async function addPerson(event) {
+  event.preventDefault();
+  const form = event.currentTarget, button = $("savePerson"), payload = {
+    name: $("personName").value.trim(),
+    address: $("personAddress").value.trim(),
+    fingerprint_id: $("personFingerprintId").value.trim(),
+    fingerprint_owner_name: $("fingerprintOwnerName").value.trim(),
+    rfid_uid: $("personRfidUid").value.trim(),
+    rfid_owner_name: $("rfidOwnerName").value.trim(),
+  };
+  button.disabled = true;
+  try {
+    await api("/api/people", { method: "POST", body: JSON.stringify(payload) });
+    form.reset();
+    await Promise.all([loadAttendance(), loadEvents()]);
+    notify("Person registered.");
+  } catch (error) { notify(error.message, true); }
+  finally { button.disabled = false; }
+}
+
+async function recordAttendance(direction) {
+  const personId = $("attendancePerson").value;
+  const person = state.people.find(item => item.id === personId);
+  if (!person) return notify("Select a registered person first.", true);
+  try {
+    await api("/api/attendance", { method: "POST", body: JSON.stringify({ person_id: personId, direction, work_date: localDateKey() }) });
+    await Promise.all([loadAttendance(), loadEvents()]);
+    notify(`Time ${direction} recorded for ${person.name}.`);
+  } catch (error) { notify(error.message, true); }
+}
+
+function syncPersonCredentials() {
+  const person = state.people.find(item => item.id === $("attendancePerson").value);
+  if (!person) return;
+  $("fingerId").value = person.fingerprint_id || "";
+  $("fingerName").value = person.fingerprint_owner_name || person.name;
+  $("rfidUid").value = person.rfid_uid || "";
+  $("rfidName").value = person.rfid_owner_name || person.name;
+}
+
 function downloadReadings() {
   const url = new URL("api.php", window.location.href);
   url.searchParams.set("route", "readings.csv");
@@ -223,6 +278,10 @@ document.addEventListener("DOMContentLoaded", async () => {
   setClock(); setInterval(setClock, 1000); renderFingerprintLabels();
   $("addDeviceTop").onclick = openDeviceDialog; $("addDeviceButton").onclick = openDeviceDialog;
   $("deviceForm").addEventListener("submit", addDevice);
+  $("personForm").addEventListener("submit", addPerson);
+  $("attendancePerson").addEventListener("change", syncPersonCredentials);
+  $("recordTimeIn").onclick = () => recordAttendance("in");
+  $("recordTimeOut").onclick = () => recordAttendance("out");
   $("saveDevice").addEventListener("click", e => { if (!$("deviceForm").reportValidity()) e.preventDefault(); });
   $("registerFinger").onclick = registerFingerprint; $("checkFinger").onclick = checkFingerprint; $("addRfid").onclick = addRfid;
   $("refreshFingerprints").onclick = renderFingerprintLabels; $("refreshRfids").onclick = loadRfids; $("refreshEvents").onclick = loadEvents;
@@ -231,7 +290,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   try {
     await api("/api/health");
     setDatabaseStatus(true, "Firebase Cloud Firestore");
-    await Promise.all([loadDevices(), loadEvents(), loadSensorReadings()]);
+    await Promise.all([loadDevices(), loadEvents(), loadSensorReadings(), loadAttendance()]);
     state.timer = setInterval(refreshAll, 5000);
   } catch (e) {
     setDatabaseStatus(false, e.message);

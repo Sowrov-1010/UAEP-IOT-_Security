@@ -156,6 +156,88 @@ try {
         respond(200, ['success' => true, 'events' => $events, 'total' => $total]);
     }
 
+    if ($method === 'GET' && $route === 'people') {
+        $people = collection_rows('people');
+        sort_rows($people, 'name', false);
+        respond(200, ['success' => true, 'people' => $people]);
+    }
+
+    if ($method === 'POST' && $route === 'people') {
+        $data = body_json();
+        $name = trim((string)($data['name'] ?? ''));
+        $address = trim((string)($data['address'] ?? ''));
+        $fingerprintId = trim((string)($data['fingerprint_id'] ?? ''));
+        $rfidUid = strtoupper((string)preg_replace('/[\\s:-]/', '', (string)($data['rfid_uid'] ?? '')));
+        if ($name === '') respond(400, ['success' => false, 'message' => 'Person name is required']);
+        if ($address === '') respond(400, ['success' => false, 'message' => 'Address is required']);
+        if ($fingerprintId !== '' && (!ctype_digit($fingerprintId) || (int)$fingerprintId < 1 || (int)$fingerprintId > 127)) {
+            respond(400, ['success' => false, 'message' => 'Fingerprint ID must be between 1 and 127']);
+        }
+        if ($rfidUid !== '' && !preg_match('/^(?:[0-9A-F]{2}){4,10}$/', $rfidUid)) {
+            respond(400, ['success' => false, 'message' => 'Enter a valid RFID UID in hexadecimal']);
+        }
+        if ($fingerprintId === '' && $rfidUid === '') {
+            respond(400, ['success' => false, 'message' => 'Add a fingerprint ID, an RFID UID, or both']);
+        }
+        foreach (collection_rows('people') as $existing) {
+            if ($fingerprintId !== '' && (string)($existing['fingerprint_id'] ?? '') === $fingerprintId) {
+                respond(409, ['success' => false, 'message' => 'That fingerprint ID is already registered']);
+            }
+            if ($rfidUid !== '' && strtoupper((string)($existing['rfid_uid'] ?? '')) === $rfidUid) {
+                respond(409, ['success' => false, 'message' => 'That RFID UID is already registered']);
+            }
+        }
+        $id = db()->createDocument('people', [
+            'name' => mb_substr($name, 0, 80),
+            'address' => mb_substr($address, 0, 200),
+            'fingerprint_id' => $fingerprintId === '' ? null : $fingerprintId,
+            'fingerprint_owner_name' => mb_substr(trim((string)($data['fingerprint_owner_name'] ?? '')) ?: $name, 0, 80),
+            'rfid_uid' => $rfidUid === '' ? null : $rfidUid,
+            'rfid_owner_name' => mb_substr(trim((string)($data['rfid_owner_name'] ?? '')) ?: $name, 0, 80),
+            'created_at' => date(DATE_ATOM),
+        ]);
+        log_event(null, 'person', 'Registered ' . $name, ['person_id' => $id]);
+        respond(201, ['success' => true, 'person' => db()->getDocument('people', $id)]);
+    }
+
+    if ($method === 'GET' && $route === 'attendance') {
+        $date = (string)($_GET['date'] ?? date('Y-m-d'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D', $date)) respond(400, ['success' => false, 'message' => 'Date must use YYYY-MM-DD']);
+        $records = db()->query('attendance', 'work_date', false, 500, '', 'work_date', $date);
+        respond(200, ['success' => true, 'attendance' => $records, 'date' => $date]);
+    }
+
+    if ($method === 'POST' && $route === 'attendance') {
+        $data = body_json();
+        $personId = trim((string)($data['person_id'] ?? ''));
+        $direction = strtolower(trim((string)($data['direction'] ?? '')));
+        if (!in_array($direction, ['in', 'out'], true)) respond(400, ['success' => false, 'message' => 'Choose time in or time out']);
+        $person = db()->getDocument('people', $personId);
+        if (!$person) respond(404, ['success' => false, 'message' => 'Registered person not found']);
+        $workDate = (string)($data['work_date'] ?? date('Y-m-d'));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D', $workDate)) respond(400, ['success' => false, 'message' => 'Work date must use YYYY-MM-DD']);
+        $recordId = hash('sha256', $personId . '|' . $workDate);
+        $record = db()->getDocument('attendance', $recordId) ?? [];
+        $timestamp = date(DATE_ATOM);
+        $attendance = [
+            'person_id' => $personId,
+            'name' => $person['name'],
+            'address' => $person['address'],
+            'fingerprint_id' => $person['fingerprint_id'] ?? null,
+            'fingerprint_owner_name' => $person['fingerprint_owner_name'] ?? $person['name'],
+            'rfid_uid' => $person['rfid_uid'] ?? null,
+            'rfid_owner_name' => $person['rfid_owner_name'] ?? $person['name'],
+            'work_date' => $workDate,
+            'time_in' => $record['time_in'] ?? null,
+            'time_out' => $record['time_out'] ?? null,
+            'updated_at' => $timestamp,
+        ];
+        $attendance[$direction === 'in' ? 'time_in' : 'time_out'] = $timestamp;
+        db()->setDocument('attendance', $recordId, $attendance);
+        log_event(null, 'attendance', 'Time ' . $direction . ': ' . $person['name'], ['person_id' => $personId, 'work_date' => $workDate]);
+        respond(200, ['success' => true, 'attendance' => array_merge($attendance, ['id' => $recordId])]);
+    }
+
     if ($method === 'GET' && $route === 'readings') {
         $limit = max(1, min(500, (int)($_GET['limit'] ?? 100)));
         $deviceId = (string)($_GET['device_id'] ?? '');
