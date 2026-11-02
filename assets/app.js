@@ -1,4 +1,4 @@
-const state = { devices: [], people: [], statuses: new Map(), statusErrors: new Map(), timer: null, toastTimer: null };
+const state = { devices: [], people: [], statuses: new Map(), statusErrors: new Map(), timer: null, lastHistoryRefreshAt: 0, toastTimer: null };
 const $ = (id) => document.getElementById(id);
 
 async function api(path, options = {}) {
@@ -17,8 +17,8 @@ function notify(message, error = false) {
   const toast = $("toast"); toast.textContent = message; toast.className = `toast show${error ? " error" : ""}`;
   clearTimeout(state.toastTimer); state.toastTimer = setTimeout(() => toast.className = "toast", 3400);
 }
-function setDatabaseStatus(connected, message) {
-  $("databaseStatus").textContent = connected ? "Connected" : "Setup required";
+function setDatabaseStatus(status, message) {
+  $("databaseStatus").textContent = status;
   $("databaseMessage").textContent = message;
 }
 function esc(value) { return String(value ?? "").replace(/[&<>"']/g, c => ({ "&":"&amp;", "<":"&lt;", ">":"&gt;", '"':"&quot;", "'":"&#39;" })[c]); }
@@ -97,7 +97,10 @@ async function connectDevice(id, button) {
 async function fetchStatus(id, showToast) {
   try {
     const result = await api(`/api/devices/${id}/status`);
-    state.statuses.set(id, result.status); state.statusErrors.delete(id); await loadDevices();
+    state.statuses.set(id, result.status); state.statusErrors.delete(id);
+    const device = state.devices.find(item => item.id === id);
+    if (device && result.device) Object.assign(device, result.device);
+    renderDevices(); updateStats();
     if (showToast) notify("Device status refreshed.");
   } catch (e) {
     state.statusErrors.set(id, e.message);
@@ -107,14 +110,17 @@ async function fetchStatus(id, showToast) {
 }
 async function refreshAll() {
   await Promise.all(state.devices.map(d => fetchStatus(d.id, false)));
-  await Promise.all([loadEvents(), loadSensorReadings()]);
+  if (Date.now() - state.lastHistoryRefreshAt >= 300000) {
+    await Promise.all([loadEvents(), loadSensorReadings()]);
+    state.lastHistoryRefreshAt = Date.now();
+  }
 }
 
 function displayBool(value, yes, no) { return value == null ? "—" : value ? yes : no; }
 async function loadSensorReadings() {
   const tbody = $("sensorReadings");
   try {
-    const result = await api("/api/readings?limit=25");
+    const result = await api("/api/readings?limit=10");
     if (!result.readings.length) {
       tbody.innerHTML = '<tr><td colspan="10" class="muted">No readings stored yet. Connect a device and wait for the next status poll.</td></tr>';
       return;
@@ -296,11 +302,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   $("accessDevice").addEventListener("change", refreshCredentialLists);
   try {
     await api("/api/health");
-    setDatabaseStatus(true, "Firebase Cloud Firestore");
+    setDatabaseStatus("Connected", "Firebase Cloud Firestore");
     await Promise.all([loadDevices(), loadEvents(), loadSensorReadings(), loadAttendance()]);
-    state.timer = setInterval(refreshAll, 5000);
+    state.lastHistoryRefreshAt = Date.now();
+    state.timer = setInterval(refreshAll, 30000);
   } catch (e) {
-    setDatabaseStatus(false, e.message);
+    const status = /quota exceeded/i.test(e.message) ? "Quota exceeded" : /credentials are not configured/i.test(e.message) ? "Setup required" : "Unavailable";
+    setDatabaseStatus(status, e.message);
     $("deviceGrid").innerHTML = `<div class="empty-state">${esc(e.message)}</div>`;
     $("sensorReadings").innerHTML = `<tr><td colspan="10" class="muted">${esc(e.message)}</td></tr>`;
     $("eventList").innerHTML = `<div class="muted">${esc(e.message)}</div>`;

@@ -144,7 +144,7 @@ try {
     }
 
     if ($method === 'GET' && $route === 'events') {
-        $events = query_rows('events', 'created_at', true, 100);
+        $events = query_rows('events', 'created_at', true, 12);
         $devices = collection_rows('devices');
         $deviceNames = [];
         foreach ($devices as $device) $deviceNames[(string)$device['id']] = $device['name'];
@@ -323,7 +323,7 @@ try {
             $online = $status < 400 && ($payload['success'] ?? true) !== false;
             $updates = ['state' => $online ? 'online' : 'offline'];
             if ($online) $updates['last_seen'] = date(DATE_ATOM);
-            db()->setDocument('devices', $id, $updates, true);
+            db()->updateDocument('devices', $id, $updates);
             log_event($id, 'connection', $online ? 'Device connected' : 'Device connection failed', $payload);
             respond($online ? 200 : $status, ['success' => $online, 'device' => get_device($id), 'response' => $payload]);
         }
@@ -333,7 +333,7 @@ try {
             $online = $status < 400 && ($payload['success'] ?? true) !== false;
             $updates = ['state' => $online ? 'online' : 'offline'];
             if ($online) $updates['last_seen'] = date(DATE_ATOM);
-            db()->setDocument('devices', $id, $updates, true);
+            db()->updateDocument('devices', $id, $updates);
             if ($online && is_array($payload)) store_sensor_reading($device, $payload);
             respond($status, ['success' => $online, 'device' => get_device($id), 'status' => $payload]);
         }
@@ -359,9 +359,12 @@ try {
     respond(404, ['success' => false, 'message' => 'API endpoint not found']);
 } catch (Throwable $e) {
     error_log('UAEP dashboard API error: ' . $e->getMessage());
-    $status = $e instanceof DomainException ? 503 : 500;
+    $quotaExceeded = $e->getCode() === 429 || stripos($e->getMessage(), 'quota exceeded') !== false;
+    $status = $e instanceof DomainException ? 503 : ($quotaExceeded ? 429 : 500);
     $message = $e instanceof DomainException
         ? $e->getMessage()
-        : 'Firestore request failed. Check Apache/PHP logs and Firebase project access.';
+        : ($quotaExceeded
+            ? 'Firestore quota exceeded. Dashboard polling has been reduced; check Firebase usage or retry after the quota resets.'
+            : 'Firestore request failed. Check Apache/PHP logs and Firebase project access.');
     respond($status, ['success' => false, 'message' => $message]);
 }

@@ -104,9 +104,10 @@ final class FirestoreRest
 
     public function setDocument(string $collection, string $id, array $data, bool $merge = false): void
     {
-        if ($merge) $data = array_replace($this->getDocument($collection, $id) ?? [], $data);
+        $existing = $this->getDocument($collection, $id);
+        if ($merge) $data = array_replace($existing ?? [], $data);
         $document = ['fields' => $this->encodeFields($data)];
-        if ($this->getDocument($collection, $id) === null) {
+        if ($existing === null) {
             $this->request('POST', $this->documentsPath() . '/' . rawurlencode($collection), [
                 'query' => ['documentId' => $id],
                 'json' => $document,
@@ -114,6 +115,18 @@ final class FirestoreRest
             return;
         }
         $this->request('PATCH', $this->documentPath($collection, $id), ['json' => $document]);
+    }
+
+    public function updateDocument(string $collection, string $id, array $data): void
+    {
+        if ($data === []) return;
+        $mask = implode('&', array_map(
+            static fn(string $field): string => 'updateMask.fieldPaths=' . rawurlencode($field),
+            array_keys($data)
+        ));
+        $this->request('PATCH', $this->documentPath($collection, $id) . '?' . $mask, [
+            'json' => ['fields' => $this->encodeFields($data)],
+        ]);
     }
 
     public function deleteDocument(string $collection, string $id): void
